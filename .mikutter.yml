@@ -1,0 +1,11 @@
+---
+slug: :mikutter-datasource-google-tasks
+depends:
+  mikutter: 3.0.4
+  plugin:
+  - gui
+  - settings
+version: '0.0.1'
+author: 
+name: mikutter-datasource-google-tasks
+description: Google Tasデータソースにするプラグイン
