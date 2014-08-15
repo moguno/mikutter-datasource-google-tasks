@@ -34,30 +34,6 @@ Plugin.create(:mikutter_datasource_google_tasks) {
     proc.call(@client, @scheme)
   end
 
-  # フィードをメッセージに変換する
-  def create_message(tasklist, task)
-    msg = Message.new(:message => task.title, :system => true)
-
-    msg[:modified] = Time.now
-
-    # ユーザ
-    @users ||= {}
-
-    if !@users[tasklist.id]
-      new_id = (@users.map { |k, v| v.id } + [13990]).max + 1
-
-      @users[tasklist.id] = User.new(:id => new_id, :idname => "Google Tasks")
-      @users[tasklist.id][:name] = tasklist.title
-    end
-
-    msg[:user] = @users[tasklist.id]
-
-    msg
-  rescue => e
-    puts e.to_s
-    puts e.backtrace
-  end
-
   # タスクを取得
   def get_tasks
     tasklists = tasks_api { |client, tasks|
@@ -92,6 +68,30 @@ Plugin.create(:mikutter_datasource_google_tasks) {
     }
 
     result
+  end
+
+  # フィードをメッセージに変換する
+  def create_message(tasklist, task)
+    msg = Message.new(:message => task.title, :system => true)
+
+    msg[:modified] = Time.now
+
+    # ユーザ
+    @users ||= {}
+
+    if !@users[tasklist.id]
+      new_id = (@users.map { |k, v| v.id } + [13990]).max + 1
+
+      @users[tasklist.id] = User.new(:id => new_id, :idname => "Google Tasks")
+      @users[tasklist.id][:name] = tasklist.title
+    end
+
+    msg[:user] = @users[tasklist.id]
+
+    msg
+  rescue => e
+    puts e.to_s
+    puts e.backtrace
   end
 
   # 起動時処理
