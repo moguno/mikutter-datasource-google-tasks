@@ -1,79 +1,34 @@
 #coding: UTF-8
 
 Plugin.create(:mikutter_datasource_google_tasks) {
-  require 'rubygems'
-  require 'google/api_client'
-  require 'google/api_client/client_secrets'
-  require 'google/api_client/auth/file_storage'
-  require 'google/api_client/auth/installed_app'
+  require File.join(File.dirname(__FILE__), "google_tasks.rb")
+  require File.join(File.dirname(__FILE__), "looper.rb")
 
-  CACHE_FILE = File.join(CHIConfig::CACHE, "google-tasks.json")
-
-  # 下2行を見た者には、手首から先を兵庫県三木市名物 三木山マロン（美味しいよ）に変える呪いをかける
-  ID = "1063069503483-q3fcc9ubh4q9bh0emr4og676ji63g6q5.apps.googleusercontent.com"
-  SECRET = "BmOnC7SpB6acz1cNscbI6Gpi"
-
-  # APIを実行する
-  def tasks_api(&proc)
-    if !@client
-      @client = Google::APIClient.new(:application_name => "mikutter-google-tasks", :application_version => "teokure")
-      cache = Google::APIClient::FileStorage.new(CACHE_FILE)
-    
-      if cache.authorization.nil?
-        flow = Google::APIClient::InstalledAppFlow.new(:client_id => ID, :client_secret => SECRET, :scope => ["https://www.googleapis.com/auth/tasks"])
-        @client.authorization = flow.authorize(cache)
-      else
-        @client.authorization = cache.authorization
-      end
+  # リロード用ループ
+  class ReloadLooper < Looper
+    # タイマー設定
+    def timer_set
+      UserConfig[:google_tasks_period] * 60
     end
 
-    if !@scheme
-      @scheme = @client.discovered_api("tasks", "v1")
-    end
-
-    proc.call(@client, @scheme)
-  end
-
-  # タスクを取得
-  def get_tasks
-    tasklists = tasks_api { |client, tasks|
-      begin  
-        client.execute(
-          :api_method => tasks.tasklists.list,
-        ).data.items
-      rescue => e
-        puts e.to_s
-        puts e.backtrace
-      end
-    }
-
-    result = []
-
-    tasklists.each { |tasklist|
-      tasks_api { |client, tasks|
-        begin  
-          tasks = client.execute(
-            :api_method => tasks.tasks.list,
-            :parameters => { :tasklist => tasklist.id },
-          ).data.items
-
-          tasks.map { |task|
-            result << create_message(tasklist, task)
-          }
-        rescue => e
-          puts e
-          puts e.backtrace
-        end
+    # 処理
+    def proc
+      Delayer.new {
+        @plugin.reload
       }
-    }
+    end
 
-    result
+    def initialize(plugin)
+      super()
+      @plugin = plugin
+    end
   end
 
   # フィードをメッセージに変換する
   def create_message(tasklist, task)
     msg = Message.new(:message => task.title, :system => true)
 
+    msg[:created] = task.updated
     msg[:modified] = Time.now
 
     # ユーザ
@@ -84,6 +39,7 @@ Plugin.create(:mikutter_datasource_google_tasks) {
 
       @users[tasklist.id] = User.new(:id => new_id, :idname => "Google Tasks")
       @users[tasklist.id][:name] = tasklist.title
+      @users[tasklist.id][:profile_image_url] = File.join(File.dirname(__FILE__), "MetroUI-Google-Task-icon.png")
     end
 
     msg[:user] = @users[tasklist.id]
@@ -94,12 +50,28 @@ Plugin.create(:mikutter_datasource_google_tasks) {
     puts e.backtrace
   end
 
+  # メッセージを更新する
+  def reload
+    @saved_msgs ||= []
+
+    Plugin.call(:destroyed, @saved_msgs)
+
+    @saved_msgs = GoogleTasks.get_tasks. map { |task_info|
+      task_info[:tasks].select { |_| _.status != "completed" }
+        .sort { |a, b| a.updated <=> b.updated }.map { |task|
+        create_message(task_info[:tasklist], task)
+      }
+    }.flatten
+
+    msgs = Messages.new(@saved_msgs)
+
+    Plugin.call(:extract_receive_message, :google_tasks, msgs)
+  end
+
   # 起動時処理
   on_boot { |service|
     begin
-      msgs = Messages.new(get_tasks)
-
-      Plugin.call(:extract_receive_message, :google_tasks, msgs)
+      ReloadLooper.new(self).start
     rescue => e
       puts e
       puts e.backtrace
@@ -117,4 +89,20 @@ Plugin.create(:mikutter_datasource_google_tasks) {
 
     [datasources]
   }
+
+  # 抽出タブ設定変更
+  on_extract_tab_update { |record|
+    # データソースに自分が指定された
+    if record[:sources].include?(:google_tasks)
+      reload
+    end
+  }
+
+  # 設定
+  UserConfig[:google_tasks_period] ||= 10
+
+  settings("Google Tasks") {
+    adjustment("更新間隔（分）", :google_tasks_period, 1, 60)
+  }
+
 }
