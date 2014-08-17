@@ -122,11 +122,18 @@ Plugin.create(:mikutter_datasource_google_tasks) {
           icon: File.join(File.dirname(__FILE__), "MetroUI-Google-Task-icon.png"),
           role: :timeline) { |opt|
     begin
+      negirai_msg = [
+        "お疲れさま♪",
+        "やったね♪",
+        "次のタスクもがんばろー♪",
+        "がんばったね♪",
+      ]
+
       opt.messages.each { |message|
         Delayer.new {
           GoogleTasks.complete_task(message[:google_tasks_tasklist], message[:google_tasks_task])
 
-          activity(:system, "Google Tasks\n「#{message[:message]}」完了だね！\n\nお疲れさま♪")
+          activity(:system, "タスク「#{message[:message]}」完了だね！\n\n#{negirai_msg.sample}")
 
           Plugin.call(:destroyed, [message])
         }
