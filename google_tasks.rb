@@ -47,24 +47,45 @@ class GoogleTasks
       end
     }
 
-    result = tasklists.map { |tasklist|
-      str = { :tasklist => tasklist, :tasks => [] }
+    task_infos = tasklists.map { |tasklist|
+      info = { :tasklist => tasklist, :tasks => [] }
 
       tasks_api { |client, tasks|
-        begin  
-          str[:tasks] = client.execute(
-            :api_method => tasks.tasks.list,
-            :parameters => { :tasklist => tasklist.id },
-          ).data.items
-        rescue => e
-          puts e
-          puts e.backtrace
+        result = client.execute(
+          :api_method => tasks.tasks.list,
+          :parameters => { :tasklist => tasklist.id },
+        )
+
+        if result.error?
+          raise result.error_message
         end
+
+        info[:tasks] = result.data.items
       }
 
-      str
+      info
     }
 
-    result
+    task_infos
+  end
+
+  # タスクを完了させる
+  def self.complete_task(tasklist, task)
+    tasks_api { |client, tasks|
+      task2 = task.dup
+      task2.status = "completed"
+
+      result = client.execute(
+        :api_method => tasks.tasks.update,
+        :parameters => {
+          :tasklist => tasklist.id,
+          :task => task.id,
+        },
+        :body_object => task2)
+
+      if result.error?
+        raise result.error_message
+      end
+    }
   end
 end

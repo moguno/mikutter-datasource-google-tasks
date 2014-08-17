@@ -30,6 +30,8 @@ Plugin.create(:mikutter_datasource_google_tasks) {
 
     msg[:created] = task.updated
     msg[:modified] = Time.now
+    msg[:google_tasks_tasklist] = tasklist
+    msg[:google_tasks_task] = task
 
     # ユーザ
     @users ||= {}
@@ -70,6 +72,9 @@ Plugin.create(:mikutter_datasource_google_tasks) {
 
       Plugin.call(:extract_receive_message, :google_tasks, msgs)
     end
+  rescue => e
+    puts e
+    puts e.backtrace
   end
 
   # 起動時処理
@@ -109,4 +114,27 @@ Plugin.create(:mikutter_datasource_google_tasks) {
     adjustment("更新間隔（分）", :google_tasks_period, 1, 60)
   }
 
+  # タスク完了
+  command(:google_tasks_complete,
+          name: "タスクを完了させる",
+          condition: lambda { |opt| opt.messages.all? { |message| message[:google_tasks_task] } },
+          visible: true,
+          icon: File.join(File.dirname(__FILE__), "MetroUI-Google-Task-icon.png"),
+          role: :timeline) { |opt|
+    begin
+      opt.messages.each { |message|
+        Delayer.new {
+          GoogleTasks.complete_task(message[:google_tasks_tasklist], message[:google_tasks_task])
+
+          activity(:system, "Google Tasks\n「#{message[:message]}」完了だね！\n\nお疲れさま♪")
+
+          Plugin.call(:destroyed, [message])
+        }
+      }
+
+    rescue => e
+      puts e
+      puts e.backtrace
+    end
+  }
 }
