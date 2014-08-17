@@ -56,16 +56,20 @@ Plugin.create(:mikutter_datasource_google_tasks) {
 
     Plugin.call(:destroyed, @saved_msgs)
 
-    @saved_msgs = GoogleTasks.get_tasks. map { |task_info|
-      task_info[:tasks].select { |_| _.status != "completed" }
+    task_infos = GoogleTasks.get_tasks
+
+    if task_infos
+      @saved_msgs = task_infos.map { |task_info|
+        task_info[:tasks].select { |_| _.status != "completed" }
         .sort { |a, b| a.updated <=> b.updated }.map { |task|
-        create_message(task_info[:tasklist], task)
-      }
-    }.flatten
+          create_message(task_info[:tasklist], task)
+        }
+      }.flatten
 
-    msgs = Messages.new(@saved_msgs)
+      msgs = Messages.new(@saved_msgs)
 
-    Plugin.call(:extract_receive_message, :google_tasks, msgs)
+      Plugin.call(:extract_receive_message, :google_tasks, msgs)
+    end
   end
 
   # 起動時処理
